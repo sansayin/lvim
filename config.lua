@@ -5,10 +5,20 @@
 lvim.keys.normal_mode["<C-s>"] = ":w<cr>"
 lvim.builtin.lualine.style = "default"
 lvim.builtin.dap.active = true
+local dap = require("dap")
 lvim.builtin.cmp.completion.keyword_length = 2
 vim.opt.shiftwidth = 4
 vim.opt.tabstop = 4
 vim.opt.relativenumber = true
+vim.cmd [[autocmd BufWritePre * lua vim.lsp.buf.format()]]
+
+-- ["<leader>tt"] = {
+--       function()
+--         require("base46").toggle_transparency()
+--       end,
+--       "toggle transparency",
+--     },
+lvim.transparent_window = true
 lvim.plugins = {
     -- { "ray-x/navigator" },
     {
@@ -21,17 +31,23 @@ lvim.plugins = {
             vim.cmd("let g:minimap_auto_start_win_enter = 1")
         end,
     },
-    {
-        "ray-x/lsp_signature.nvim",
-        event = "BufRead",
-        config = function() require "lsp_signature".on_attach() end,
-    },
-    {
-        "simrat39/symbols-outline.nvim",
-        config = function()
-            require('symbols-outline').setup()
-        end
-    },
+    -- {
+    --     'nvim-lualine/lualine.nvim',
+    --     config = function()
+    --         require('nvim-tree/nvim-web-devicons').setup({ opt = true })
+    --     end
+    -- },
+    -- {
+    --     "ray-x/lsp_signature.nvim",
+    --     event = "BufRead",
+    --     config = function() require "lsp_signature".on_attach() end,
+    -- },
+    -- {
+    --     "simrat39/symbols-outline.nvim",
+    --     config = function()
+    --         require('symbols-outline').setup()
+    --     end
+    -- },
     {
         "iamcco/markdown-preview.nvim",
         build = "cd app && npm install",
@@ -78,10 +94,16 @@ lvim.plugins = {
             require('gopher').setup()
         end
     },
+    {
+        "mfussenegger/nvim-dap-python",
+        "nvim-neotest/neotest",
+        "nvim-neotest/neotest-python",
+    }
 }
-lvim.builtin.dap.active = true
-local dap = require("dap")
-
+local mason_path = vim.fn.glob(vim.fn.stdpath "data" .. "/mason/")
+pcall(function()
+    require("dap-python").setup(mason_path .. "packages/debugpy/venv/bin/python")
+end)
 dap.adapters.go = function(callback, _)
     local stdout = vim.loop.new_pipe(false)
     local handle
@@ -114,12 +136,37 @@ dap.adapters.go = function(callback, _)
     end, 100)
 end
 -- https://github.com/go-delve/delve/blob/master/Documentation/usage/dlv_dap.md
+local function get_arguments()
+    local co = coroutine.running()
+    if co then
+        return coroutine.create(function()
+            local args = {}
+            vim.ui.input({ prompt = 'Enter command-line arguments: ' }, function(input)
+                args = vim.split(input, " ")
+            end)
+            coroutine.resume(co, args)
+        end)
+    else
+        local args = {}
+        vim.ui.input({ prompt = 'Enter command-line arguments: ' }, function(input)
+            args = vim.split(input, " ")
+        end)
+        return args
+    end
+end
 dap.configurations.go = {
     {
         type = "go",
         name = "Debug",
         request = "launch",
         program = "${file}",
+    },
+    {
+        type = "go",
+        name = "Debug with arguments",
+        request = "launch",
+        program = "${file}",
+        args = get_arguments,
     },
     {
         type = "go",
